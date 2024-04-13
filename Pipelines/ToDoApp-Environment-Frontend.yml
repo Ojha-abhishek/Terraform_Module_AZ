@@ -1,0 +1,58 @@
+trigger : none
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: BuildStage
+    displayName: "Build Stage"
+    jobs:
+      - job: BuildJob
+        displayName: "Build Job"
+        steps:
+        - task: NodeTool@0
+          displayName: "Install Node 16.x"
+          inputs:
+            versionSource: 'spec'
+            versionSpec: '16.x'
+        
+        - task: CmdLine@2
+          displayName: "Install NPM"
+          inputs:
+            script: 'npm install'
+        - task: CmdLine@2
+          displayName: "NPM Build"
+          inputs:
+            script: 'npm run build'
+        - task: PublishBuildArtifacts@1
+          displayName: "Publish Artifacts"
+          inputs:
+            PathtoPublish: '$(Build.SourcesDirectory)/build/'
+            ArtifactName: 'ToDoApp-Frontend-Artifact'
+            publishLocation: 'Container'
+
+  - stage: DeployStage
+    displayName: "DEV Deploy Stage"
+    dependsOn: BuildStage
+    jobs:
+    - deployment: VMDeploy
+      displayName: "Deploy to VM DEV"
+      environment: 
+        name: ToDoApp DEV
+        resourceType: virtualMachine
+      strategy:
+        runOnce:
+          deploy:   
+            steps:
+            - download: none
+            - task: DownloadBuildArtifacts@1
+              displayName: "Download Artifacts"
+              inputs:
+                buildType: 'current'
+                downloadType: 'single'
+                artifactName: 'ToDoApp-Frontend-Artifact'
+                downloadPath: '$(Build.ArtifactStagingDirectory)'
+            - task: CmdLine@2
+              displayName: "Copy Build Artifact to HTML"
+              inputs:
+                script: 'sudo cp $(Build.ArtifactStagingDirectory)/ToDoApp-Frontend-Artifact/* /var/www/html/ -r'
